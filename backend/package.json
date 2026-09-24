@@ -1,20 +1,16 @@
 {
-  "name": "backend",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "interviewai-backend",
+  "version": "5.0.0",
+  "private": true,
   "scripts": {
-    "dev": "ts-node-dev src/server.ts"
+    "dev": "ts-node-dev src/server.ts",
+    "typecheck": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "cors": "^2.8.6",
-    "dotenv": "^18.0.3",
+    "dotenv": "^17.2.2",
     "express": "^5.2.1",
-    "pg": "^8.23.0"
+    "@google/genai": "latest"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
