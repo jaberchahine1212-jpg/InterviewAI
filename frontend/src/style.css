@@ -2142,3 +2142,152 @@ footer {
     width: calc(100% - 24px);
   }
 }
+
+/* =========================================================
+   INTERVIEWAI — FINAL MOBILE RESPONSIVE PASS
+   ========================================================= */
+@media (max-width: 760px) {
+  html, body, #root { width:100%; max-width:100%; overflow-x:hidden; }
+
+  .nav:not(.auth-nav) { min-height:64px; padding:0 14px; gap:8px; }
+  .nav:not(.auth-nav) .brand { gap:8px; font-size:16px; white-space:nowrap; }
+  .nav:not(.auth-nav) .brand-mark { width:34px; height:34px; flex-basis:34px; border-radius:10px; }
+  .nav-actions { gap:6px; }
+  .status, .user-email, .ghost { display:none; }
+  .logout-button { min-height:36px; padding:0 10px; font-size:12px; }
+  .theme-toggle { width:36px; height:36px; flex-basis:36px; border-radius:10px; font-size:17px; }
+
+  .home { width:calc(100% - 32px); padding:48px 0; }
+  .hero h1 { margin:18px 0; font-size:clamp(38px,11.5vw,54px); line-height:1.02; letter-spacing:-.045em; }
+  .hero > p { font-size:15px; line-height:1.65; }
+  .hero-actions { margin-top:26px; flex-direction:column; align-items:stretch; gap:12px; }
+  .hero-actions .primary { width:100%; min-height:50px; }
+  .small-note { text-align:center; overflow-wrap:anywhere; }
+  .feature-grid { margin-top:42px; grid-template-columns:1fr; gap:12px; }
+  .feature-grid article { min-height:auto; padding:20px; }
+
+  .assistant-wrap { width:100%; padding:0; display:block; }
+  .context-panel { display:none; }
+  .chat-panel { min-height:calc(100dvh - 64px); border-left:0; border-right:0; border-bottom:0; border-radius:0; }
+  .chat-head { padding:16px 14px; align-items:flex-start; flex-wrap:wrap; gap:10px; }
+  .chat-head-left { width:100%; gap:10px; }
+  .chat-head-left > div { min-width:0; }
+  .chat-head h2 { margin-top:5px; font-size:19px; line-height:1.2; }
+  .back-button { width:36px; height:36px; flex-basis:36px; border-radius:10px; }
+  .role-chip { margin-left:46px; max-width:calc(100% - 46px); white-space:normal; line-height:1.35; }
+  .chat-body { min-height:0; max-height:none; padding:20px 12px; }
+  .empty-state { margin:26px auto 22px; padding:0 4px; }
+  .ai-orb { width:52px; height:52px; margin-bottom:16px; }
+  .empty-state h3 { font-size:22px; line-height:1.25; }
+  .empty-state > p { font-size:14px; }
+  .empty-state .context-note { margin-top:20px; text-align:left; }
+  .message-row { gap:8px; margin-bottom:15px; }
+  .avatar { width:32px; height:32px; flex-basis:32px; border-radius:9px; font-size:10px; }
+  .message-bubble { max-width:calc(100% - 40px); padding:12px 13px; border-radius:13px; font-size:14px; line-height:1.55; overflow-wrap:anywhere; }
+  .chat-error, .setup-banner { margin:0 12px 10px; overflow-wrap:anywhere; }
+  .composer { margin:0 10px; padding:8px 8px 8px 12px; gap:8px; border-radius:14px; }
+  .composer textarea { min-width:0; min-height:44px; font-size:16px; }
+  .send-button { width:42px; height:42px; flex-basis:42px; border-radius:11px; }
+  .composer-note { padding:8px 12px 14px; font-size:10px; }
+
+  .auth-nav { height:64px; padding:0 16px; }
+  .auth-nav .brand { font-size:17px; gap:8px; }
+  .auth-nav .brand-mark { width:32px; height:32px; flex-basis:32px; }
+  .auth-page { width:calc(100% - 32px); grid-template-columns:1fr; gap:32px; padding:38px 0 44px; align-items:start; }
+  .auth-intro { text-align:center; }
+  .auth-intro .eyebrow { margin-bottom:14px; }
+  .auth-intro .eyebrow::before { display:none; }
+  .auth-intro h1 { font-size:clamp(38px,11vw,48px); line-height:1.04; }
+  .auth-intro > p { margin-top:18px; font-size:14px; line-height:1.65; }
+  .auth-features { margin-top:28px; grid-template-columns:1fr; gap:10px; text-align:left; }
+  .auth-features div { padding:15px 16px; }
+  .auth-features span { margin-bottom:7px; }
+  .auth-card { width:100%; padding:26px 20px 24px; border-radius:20px; }
+  .auth-card-header { margin-bottom:22px; }
+  .auth-form input { font-size:16px; }
+
+  .modal-backdrop { padding:16px; }
+  .logout-modal { padding:22px 18px; border-radius:18px; }
+  .logout-modal-actions { grid-template-columns:1fr; }
+}
+
+@media (max-width:390px) {
+  .nav:not(.auth-nav) { padding-left:10px; padding-right:10px; }
+  .nav:not(.auth-nav) .brand { font-size:15px; }
+  .nav:not(.auth-nav) .brand-mark { width:32px; height:32px; flex-basis:32px; }
+  .logout-button { padding:0 8px; }
+  .home { width:calc(100% - 24px); }
+  .hero h1 { font-size:37px; }
+  .auth-page { width:calc(100% - 24px); }
+  .auth-card { padding-left:16px; padding-right:16px; }
+  .chat-head { padding-left:10px; padding-right:10px; }
+  .chat-body { padding-left:9px; padding-right:9px; }
+  .composer { margin-left:8px; margin-right:8px; }
+}
+
+/* =========================================================
+   MOBILE CONTEXT / ROLE + LEVEL SELECTOR
+   ========================================================= */
+@media (max-width: 760px) {
+  .assistant-wrap {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    padding: 12px 10px 24px !important;
+  }
+
+  .context-panel {
+    display: block !important;
+    width: 100% !important;
+    padding: 16px !important;
+    border-radius: 16px !important;
+  }
+
+  .context-panel .step-label {
+    font-size: 10px !important;
+  }
+
+  .context-panel h2 {
+    margin: 8px 0 4px !important;
+    font-size: 18px !important;
+  }
+
+  .context-panel > .muted {
+    margin: 0 !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+  }
+
+  .context-panel label {
+    margin-top: 14px !important;
+    gap: 6px !important;
+    font-size: 12px !important;
+  }
+
+  .context-panel select {
+    height: 44px !important;
+    font-size: 16px !important;
+  }
+
+  .context-panel .context-note {
+    display: none !important;
+  }
+
+  .chat-panel {
+    min-height: calc(100dvh - 64px) !important;
+    border: 1px solid rgba(148,163,184,.13) !important;
+    border-radius: 16px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .assistant-wrap {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .context-panel {
+    padding: 14px !important;
+  }
+}
+

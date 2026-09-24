@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
 
-const API = 'http://localhost:3000';
+const API = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '');
 
 const roles = [
   'General Technical Interview',
@@ -868,10 +868,6 @@ function App() {
           </div>
         </div>
       )}
-
-      <footer>
-        InterviewAI · AI-powered interview preparation
-      </footer>
 
     </div>
   );
