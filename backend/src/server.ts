@@ -3,7 +3,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { GoogleGenAI } from "@google/genai";
 import pool from "./database/connection";
 
 dotenv.config();
@@ -14,13 +13,15 @@ app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
 const PORT = Number(process.env.PORT || 3000);
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-const API_KEY = (process.env.GEMINI_API_KEY || "").trim();
-const JWT_SECRET = (process.env.JWT_SECRET || "").trim();
 
-const ai = API_KEY
-  ? new GoogleGenAI({ apiKey: API_KEY })
-  : null;
+const MODEL =
+  process.env.OPENROUTER_MODEL || "openrouter/free";
+
+const OPENROUTER_API_KEY =
+  (process.env.OPENROUTER_API_KEY || "").trim();
+
+const JWT_SECRET =
+  (process.env.JWT_SECRET || "").trim();
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -34,8 +35,8 @@ type ChatMessage = {
 app.get("/", (_req, res) => {
   res.json({
     message: "InterviewAI API running",
-    provider: "Google Gemini",
-    version: "5.0"
+    provider: "OpenRouter",
+    version: "6.0"
   });
 });
 
@@ -49,17 +50,17 @@ app.get("/api/health", async (_req, res) => {
 
     res.json({
       ok: true,
-      aiConfigured: Boolean(ai),
+      aiConfigured: Boolean(OPENROUTER_API_KEY),
       databaseConnected: true,
-      provider: "Google Gemini",
+      provider: "OpenRouter",
       model: MODEL
     });
   } catch (error) {
     res.status(500).json({
       ok: false,
-      aiConfigured: Boolean(ai),
+      aiConfigured: Boolean(OPENROUTER_API_KEY),
       databaseConnected: false,
-      provider: "Google Gemini",
+      provider: "OpenRouter",
       model: MODEL
     });
   }
@@ -95,7 +96,6 @@ app.post("/api/auth/signup", async (req, res) => {
   }
 
   try {
-    // Check if email already exists
     const existingUser = await pool.query(
       "SELECT id FROM users WHERE email = $1",
       [email]
@@ -107,10 +107,8 @@ app.post("/api/auth/signup", async (req, res) => {
       });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Insert user into PostgreSQL
     const result = await pool.query(
       `
       INSERT INTO users (email, password)
@@ -122,7 +120,6 @@ app.post("/api/auth/signup", async (req, res) => {
 
     const user = result.rows[0];
 
-    // Create JWT
     const token = jwt.sign(
       {
         userId: user.id,
@@ -172,7 +169,6 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
-    // Find user
     const result = await pool.query(
       `
       SELECT id, email, password
@@ -190,7 +186,6 @@ app.post("/api/auth/login", async (req, res) => {
 
     const user = result.rows[0];
 
-    // Compare entered password with hashed password
     const validPassword = await bcrypt.compare(
       password,
       user.password
@@ -202,7 +197,6 @@ app.post("/api/auth/login", async (req, res) => {
       });
     }
 
-    // Create JWT
     const token = jwt.sign(
       {
         userId: user.id,
@@ -232,7 +226,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // ======================================================
-// ASK GEMINI
+// ASK OPENROUTER
 // ======================================================
 
 app.post("/api/ask", async (req, res) => {
@@ -268,75 +262,100 @@ app.post("/api/ask", async (req, res) => {
     });
   }
 
-  if (!ai) {
+  if (!OPENROUTER_API_KEY) {
     return res.status(503).json({
       message:
-        "Gemini is not configured yet. Paste your API key into backend/.env and restart the backend."
+        "OpenRouter is not configured. Add OPENROUTER_API_KEY to backend/.env and restart the backend."
     });
   }
 
   try {
-    const contents = [
+    const systemPrompt =
+      `You are InterviewAI, a concise interview-preparation assistant. ` +
+      `The user asks the questions and you answer them. ` +
+      `Tailor each answer to a ${level} candidate targeting ${role}. ` +
+      `Start with a clear interview-ready answer. ` +
+      `Add a short explanation or example when useful, then finish with one practical interview tip. ` +
+      `Keep answers focused, accurate, easy to study, and suitable for interview preparation.`;
+
+    const messages = [
+      {
+        role: "system",
+        content: systemPrompt
+      },
+
       ...history.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [
-          {
-            text: m.content
-          }
-        ]
+        role: m.role,
+        content: m.content
       })),
 
       {
         role: "user",
-        parts: [
-          {
-            text: question
-          }
-        ]
+        content: question
       }
     ];
 
-    const response = await ai.models.generateContent({
-      model: MODEL,
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
 
-      contents,
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://interviewai-rust.vercel.app",
+          "X-Title": "InterviewAI"
+        },
 
-      config: {
-        systemInstruction:
-          `You are InterviewAI, a concise interview-preparation assistant. ` +
-          `The user asks the questions and you answer them. ` +
-          `Tailor each answer to a ${level} candidate targeting ${role}. ` +
-          `Start with a clear interview-ready answer. ` +
-          `Add a short explanation or example when useful, then finish with one practical interview tip. ` +
-          `Keep answers focused, accurate, easy to study, and suitable for interview preparation.`,
-
-        maxOutputTokens: 1200,
-
-        temperature: 0.5
+        body: JSON.stringify({
+          model: MODEL,
+          messages,
+          temperature: 0.5,
+          max_tokens: 1200
+        })
       }
-    });
+    );
 
-    const answer = String(response.text || "").trim();
+    const data: any = await response.json();
+
+    if (!response.ok) {
+      console.error(
+        "OpenRouter request failed:",
+        data
+      );
+
+      return res.status(response.status).json({
+        message:
+          data?.error?.message ||
+          "OpenRouter request failed."
+      });
+    }
+
+    const answer = String(
+      data?.choices?.[0]?.message?.content || ""
+    ).trim();
 
     return res.json({
       answer:
         answer ||
         "I could not generate an answer. Please try again.",
 
-      provider: "Google Gemini",
+      provider: "OpenRouter",
 
-      model: MODEL
+      model:
+        data?.model ||
+        MODEL
     });
   } catch (error: any) {
     console.error(
-      "Gemini request failed:",
+      "OpenRouter request failed:",
       error?.message || error
     );
 
     return res.status(500).json({
-      message: error?.message
-        ? `Gemini request failed: ${error.message}`
-        : "The Gemini request failed. Check your API key and try again."
+      message:
+        error?.message ||
+        "The OpenRouter request failed. Please try again."
     });
   }
 });
@@ -347,12 +366,12 @@ app.post("/api/ask", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on ${PORT}`);
-  console.log(`Gemini model: ${MODEL}`);
+  console.log(`OpenRouter model: ${MODEL}`);
 
   console.log(
-    ai
-      ? "Gemini API: configured"
-      : "Gemini API: waiting for GEMINI_API_KEY in backend/.env"
+    OPENROUTER_API_KEY
+      ? "OpenRouter API: configured"
+      : "OpenRouter API: waiting for OPENROUTER_API_KEY in backend/.env"
   );
 
   console.log(
