@@ -230,6 +230,76 @@ app.post("/api/auth/login", async (req, res) => {
 // ======================================================
 
 app.post("/api/ask", async (req, res) => {
+  if (!JWT_SECRET) {
+    return res.status(500).json({
+      message: "JWT_SECRET is not configured."
+    });
+  }
+
+  const bearer = /^Bearer\s+(\S+)$/i.exec(
+    (req.get("Authorization") || "").trim()
+  );
+
+  if (!bearer) {
+    return res.status(401).json({
+      message: "A valid Authorization Bearer token is required."
+    });
+  }
+
+  let userId: string | number;
+
+  try {
+    const payload = jwt.verify(bearer[1], JWT_SECRET, {
+      algorithms: ["HS256"]
+    });
+
+    if (
+      typeof payload === "string" ||
+      !(
+        (typeof payload.userId === "number" &&
+          Number.isSafeInteger(payload.userId) &&
+          payload.userId > 0) ||
+        (typeof payload.userId === "string" &&
+          payload.userId.trim().length > 0)
+      )
+    ) {
+      return res.status(401).json({
+        message: "Invalid authentication token."
+      });
+    }
+
+    userId = payload.userId;
+  } catch {
+    return res.status(401).json({
+      message: "Invalid or expired authentication token."
+    });
+  }
+
+  const suppliedInterviewId = req.body.interviewId;
+  let interviewId: string | number | null = null;
+
+  if (suppliedInterviewId !== undefined && suppliedInterviewId !== null) {
+    if (
+      !(
+        (typeof suppliedInterviewId === "number" &&
+          Number.isSafeInteger(suppliedInterviewId) &&
+          suppliedInterviewId > 0) ||
+        (typeof suppliedInterviewId === "string" &&
+          suppliedInterviewId.trim().length > 0 &&
+          suppliedInterviewId.length <= 128)
+      )
+    ) {
+      return res.status(400).json({
+        message: "Invalid interviewId."
+      });
+    }
+
+    interviewId =
+      typeof suppliedInterviewId === "string"
+        ? suppliedInterviewId.trim()
+        : suppliedInterviewId;
+  }
+
   const question = String(req.body.question || "").trim();
 
   const role = String(
@@ -270,13 +340,29 @@ app.post("/api/ask", async (req, res) => {
   }
 
   try {
+    if (interviewId !== null) {
+      const existingInterview = await pool.query(
+        "SELECT id FROM interviews WHERE id = $1 AND user_id = $2",
+        [interviewId, userId]
+      );
+
+      if (existingInterview.rows.length === 0) {
+        return res.status(404).json({
+          message: "Interview not found."
+        });
+      }
+
+      interviewId = existingInterview.rows[0].id;
+    }
+
     const systemPrompt =
       `You are InterviewAI, a concise interview-preparation assistant. ` +
       `The user asks the questions and you answer them. ` +
       `Tailor each answer to a ${level} candidate targeting ${role}. ` +
       `Start with a clear interview-ready answer. ` +
       `Add a short explanation or example when useful, then finish with one practical interview tip. ` +
-      `Keep answers focused, accurate, easy to study, and suitable for interview preparation.`;
+      `Keep answers focused, accurate, easy to study, and suitable for interview preparation. ` +
+      `Answer in the same language as the user\'s latest question unless the user explicitly asks for another language.`;
 
     const messages = [
       {
@@ -303,80 +389,129 @@ app.post("/api/ask", async (req, res) => {
         headers: {
           Authorization: `Bearer ${OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://interviewai-rust.vercel.app",
-          "X-Title": "InterviewAI"
-        },
+          "HTTP-Referer": "https://interviewai-rust.vercel.app", 
+          "X-Title": "InterviewAI" 
+        }, 
+ 
+        body: JSON.stringify({ 
+          model: MODEL, 
+          messages, 
+          temperature: 0.5, 
+          max_tokens: 1200 
+        }) 
+      } 
+    ); 
+ 
+    const data: any = await response.json(); 
+ 
+    if (!response.ok) { 
+      console.error( 
+        "OpenRouter request failed:", 
+        data 
+      ); 
+ 
+      return res.status(response.status).json({ 
+        message: 
+          data?.error?.message || 
+          "OpenRouter request failed." 
+      }); 
+    } 
+ 
+    const answer = String( 
+      data?.choices?.[0]?.message?.content || "" 
+    ).trim(); 
+ 
+    // Only persist actual generated answers, not the empty-answer fallback.
+    if (answer) {
+      const client = await pool.connect();
 
-        body: JSON.stringify({
-          model: MODEL,
-          messages,
-          temperature: 0.5,
-          max_tokens: 1200
-        })
+      try {
+        await client.query("BEGIN");
+
+        if (interviewId === null) {
+          const createdInterview = await client.query(
+            `
+            INSERT INTO interviews (user_id, role, topic)
+            VALUES ($1, $2, $3)
+            RETURNING id
+            `,
+            [userId, role, Array.from(question).slice(0, 100).join("")]
+          );
+
+          interviewId = createdInterview.rows[0].id;
+        }
+
+        // Recheck ownership at the write, including after the network request.
+        const savedQuestion = await client.query(
+          `
+          INSERT INTO questions (interview_id, question_text, answer)
+          SELECT id, $2, $3
+          FROM interviews
+          WHERE id = $1 AND user_id = $4
+          RETURNING id
+          `,
+          [interviewId, question, answer, userId]
+        );
+
+        if (savedQuestion.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({
+            message: "Interview not found."
+          });
+        }
+
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
       }
-    );
-
-    const data: any = await response.json();
-
-    if (!response.ok) {
-      console.error(
-        "OpenRouter request failed:",
-        data
-      );
-
-      return res.status(response.status).json({
-        message:
-          data?.error?.message ||
-          "OpenRouter request failed."
-      });
     }
 
-    const answer = String(
-      data?.choices?.[0]?.message?.content || ""
-    ).trim();
-
     return res.json({
-      answer:
-        answer ||
-        "I could not generate an answer. Please try again.",
-
-      provider: "OpenRouter",
-
-      model:
-        data?.model ||
-        MODEL
-    });
-  } catch (error: any) {
-    console.error(
-      "OpenRouter request failed:",
-      error?.message || error
-    );
-
-    return res.status(500).json({
-      message:
-        error?.message ||
-        "The OpenRouter request failed. Please try again."
-    });
-  }
-});
-
-// ======================================================
-// START SERVER
-// ======================================================
-
-app.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
-  console.log(`OpenRouter model: ${MODEL}`);
-
-  console.log(
-    OPENROUTER_API_KEY
-      ? "OpenRouter API: configured"
-      : "OpenRouter API: waiting for OPENROUTER_API_KEY in backend/.env"
-  );
-
-  console.log(
-    JWT_SECRET
-      ? "Authentication: configured"
-      : "Authentication: waiting for JWT_SECRET in backend/.env"
-  );
+      interviewId,
+      answer: 
+        answer || 
+        "I could not generate an answer. Please try again.", 
+ 
+      provider: "OpenRouter", 
+ 
+      model: 
+        data?.model || 
+        MODEL 
+    }); 
+  } catch (error: any) { 
+    console.error( 
+      "OpenRouter request failed:", 
+      error?.message || error 
+    ); 
+ 
+    return res.status(500).json({ 
+      message: 
+        error?.message || 
+        "The OpenRouter request failed. Please try again." 
+    }); 
+  } 
+}); 
+ 
+// ====================================================== 
+// START SERVER 
+// ====================================================== 
+ 
+app.listen(PORT, () => { 
+  console.log(`Server running on ${PORT}`); 
+  console.log(`OpenRouter model: ${MODEL}`); 
+ 
+  console.log( 
+    OPENROUTER_API_KEY 
+      ? "OpenRouter API: configured" 
+      : "OpenRouter API: waiting for OPENROUTER_API_KEY in backend/.env" 
+  ); 
+ 
+  console.log( 
+    JWT_SECRET 
+      ? "Authentication: configured" 
+      : "Authentication: waiting for JWT_SECRET in backend/.env" 
+  ); 
 });
