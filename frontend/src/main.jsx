@@ -107,6 +107,13 @@ function App() {
 
 
   const bottomRef = useRef(null);
+  const activeRequestRef = useRef(null);
+
+  useEffect(() => () => {
+    const request = activeRequestRef.current;
+    activeRequestRef.current = null;
+    request?.controller.abort();
+  }, []);
 
 
 
@@ -336,7 +343,15 @@ function App() {
 
 
 
+  function cancelPendingAnswer() {
+    const request = activeRequestRef.current;
+    activeRequestRef.current = null;
+    request?.controller.abort();
+    setLoading(false);
+  }
+
   function logout() {
+    cancelPendingAnswer();
 
     localStorage.removeItem('interviewai_token');
 
@@ -394,7 +409,7 @@ function App() {
 
 
 
-    if (!text || loading) {
+    if (!text || loading || activeRequestRef.current) {
 
       return;
 
@@ -403,6 +418,12 @@ function App() {
 
 
     const previous = messages;
+    const request = { controller: new AbortController(), timedOut: false };
+    activeRequestRef.current = request;
+    const timeout = setTimeout(() => {
+      request.timedOut = true;
+      request.controller.abort();
+    }, 60000);
 
 
 
@@ -435,6 +456,7 @@ function App() {
       const response = await fetch(`${API}/api/ask`, {
 
         method: 'POST',
+        signal: request.controller.signal,
 
 
 
@@ -481,6 +503,9 @@ function App() {
 
 
 
+      // Ignore results from a chat/session that was cancelled.
+      if (activeRequestRef.current !== request) return;
+
       setMessages(prev => [
 
         ...prev,
@@ -504,17 +529,19 @@ function App() {
       setConfigured(true);
 
     } catch (err) {
-
-      setError(
-
-        err.message || 'Backend connection failed.'
-
-      );
-
+      if (activeRequestRef.current !== request) return;
+      setMessages(previous);
+      // Keep any newer draft the user typed while waiting.
+      setQuestion(current => current || text);
+      setError(request.timedOut
+        ? 'The request took too long. Please try again.'
+        : err.message || 'Backend connection failed.');
     } finally {
-
-      setLoading(false);
-
+      clearTimeout(timeout);
+      if (activeRequestRef.current === request) {
+        activeRequestRef.current = null;
+        setLoading(false);
+      }
     }
 
   }
@@ -522,6 +549,7 @@ function App() {
 
 
   function newChat() {
+    cancelPendingAnswer();
 
     setMessages([]);
 

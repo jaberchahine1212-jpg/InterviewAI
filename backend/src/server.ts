@@ -113,7 +113,7 @@ app.post("/api/auth/signup", async (req, res) => {
       `
       INSERT INTO users (email, password)
       VALUES ($1, $2)
-      RETURNING id, email, created_at
+      RETURNING id, email, 
       `,
       [email, hashedPassword]
     );
@@ -385,6 +385,7 @@ app.post("/api/ask", async (req, res) => {
       "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
+        signal: AbortSignal.timeout(45000),
 
         headers: {
           Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -431,11 +432,11 @@ app.post("/api/ask", async (req, res) => {
         if (interviewId === null) {
           const createdInterview = await client.query(
             `
-            INSERT INTO interviews (user_id, role, topic)
+            INSERT INTO interviews (user_id, role, experience_level)
             VALUES ($1, $2, $3)
             RETURNING id
             `,
-            [userId, role, Array.from(question).slice(0, 100).join("")]
+             [userId, role, level]
           );
 
           interviewId = createdInterview.rows[0].id;
@@ -481,7 +482,12 @@ app.post("/api/ask", async (req, res) => {
         data?.model || 
         MODEL 
     }); 
-  } catch (error: any) { 
+  } catch (error: any) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      return res.status(504).json({
+        message: "The AI service took too long to respond. Please try again."
+      });
+    }
     console.error( 
       "OpenRouter request failed:", 
       error?.message || error 
